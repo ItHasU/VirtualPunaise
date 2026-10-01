@@ -22,16 +22,38 @@ const SLEEP_ANGULAR = 0.3; // rad/s
 const SLEEP_TIME = 0.25; // s
 const MAX_TIME = 10; // s
 
-// Générateur pseudo-aléatoire reproductible (mulberry32).
+// Générateur pseudo-aléatoire reproductible : sfc32 (128 bits d'état, période ≥ 2^32,
+// en pratique ~2^127). Avec une graine de 128 bits, des calculs parallèles
+// démarrent sur des suites indépendantes. Renvoie un nombre uniforme dans [0, 1[.
+// `seed` : un entier, ou un tableau de 4 entiers 32 bits.
 export function makeRng(seed) {
-  let a = seed >>> 0;
-  return function () {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  let [a, b, c, d] = Array.isArray(seed) ? seed : expandSeed(seed);
+  const next = function () {
+    a |= 0; b |= 0; c |= 0; d |= 0;
+    const t = (((a + b) | 0) + d) | 0;
+    d = (d + 1) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
   };
+  for (let i = 0; i < 15; i++) next(); // mélange initial de l'état
+  return next;
+}
+
+// Étend un entier en 4 mots de 32 bits (splitmix32).
+function expandSeed(seed) {
+  let x = seed >>> 0;
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    x = (x + 0x9e3779b9) | 0;
+    let z = x;
+    z = Math.imul(z ^ (z >>> 16), 0x85ebca6b);
+    z = Math.imul(z ^ (z >>> 13), 0xc2b2ae35);
+    out.push((z ^ (z >>> 16)) >>> 0);
+  }
+  return out;
 }
 
 // Orientation aléatoire uniforme (méthode de Shoemake). Quaternion [w, x, y, z].
@@ -156,6 +178,19 @@ function effectiveMass(body, cx, cy, cz) {
   return 1 / (body.invMass + cx * ax + cy * ay + cz * az);
 }
 
+// Tri par insertion (n est petit) des n premiers contacts, par profondeur décroissante.
+function sortByDepth(contacts, n) {
+  for (let i = 1; i < n; i++) {
+    const c = contacts[i];
+    let j = i - 1;
+    while (j >= 0 && contacts[j].depth < c.depth) {
+      contacts[j + 1] = contacts[j];
+      j--;
+    }
+    contacts[j + 1] = c;
+  }
+}
+
 /** Avance la simulation d'un pas de temps dt. */
 export function step(body, dt, physics) {
   if (body.asleep) return;
@@ -182,6 +217,11 @@ export function step(body, dt, physics) {
     }
   }
   body.nContacts = n;
+  // Les impulsions séquentielles dépendent de l'ordre de traitement des contacts.
+  // Un ordre fixe (celui de l'enveloppe) favoriserait toujours le même côté de l'objet :
+  // on traite donc les contacts du plus enfoncé au moins enfoncé, ordre qui ne dépend
+  // que de la géométrie du choc.
+  sortByDepth(body.contacts, n);
 
   // pseudo-vitesses de correction de position (« split impulse »)
   const pv = body.pv, pw = body.pw;

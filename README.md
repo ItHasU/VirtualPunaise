@@ -64,7 +64,11 @@ Voir `js/physics.js` et `js/shapes.js`.
   ce qui reproduit la précession d'un solide non sphérique.
 - Contacts résolus par **impulsions séquentielles** : coefficient de restitution,
   frottement de Coulomb, légère résistance au roulement, correction de pénétration
-  sans apport d'énergie (*split impulse*).
+  sans apport d'énergie (*split impulse*). Les contacts sont traités du plus enfoncé
+  au moins enfoncé : un ordre fixe favoriserait toujours le même côté de l'objet.
+- Nombres aléatoires : générateur sfc32 (128 bits d'état) avec des graines de 128 bits
+  tirées par le générateur cryptographique du navigateur ; chaque calcul parallèle
+  utilise sa propre suite.
 - Conditions initiales aléatoires : orientation uniforme, rotation et vitesse horizontale aléatoires.
 - Un objet immobile est classé selon l'orientation de son axe de symétrie.
 - Les objets d'une même série ne se percutent pas entre eux (lancers indépendants).

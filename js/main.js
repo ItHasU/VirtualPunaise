@@ -50,8 +50,9 @@ const freqChart = new FrequencyChart($('#freq-chart'));
 const seriesChart = new SeriesHistogram($('#series-chart'));
 const energyChart = new EnergyChart($('#energy-chart'));
 
+// Graine de 128 bits, tirée par le générateur cryptographique du navigateur.
 function randomSeed() {
-  return crypto.getRandomValues(new Uint32Array(1))[0];
+  return Array.from(crypto.getRandomValues(new Uint32Array(4)));
 }
 
 // ---------------------------------------------------------------- paramètres

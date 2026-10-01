@@ -74,3 +74,54 @@ test('outils statistiques', () => {
   assert.ok(twoProportionTest(50, 100, 50, 100).pValue > 0.99);
   assert.ok(twoProportionTest(700, 1000, 500, 1000).pValue < 0.001);
 });
+
+test('le résultat ne dépend pas de l’ordre des points de l’enveloppe (pas de côté favorisé)', () => {
+  for (const kind of ['jeton', 'punaise']) {
+    const cfg = config((c) => (c.kind = kind));
+    const shapeA = makeShape(cfg);
+    const shapeB = makeShape(cfg);
+    shapeB.hull.reverse();
+    const a = createBody(shapeA), b = createBody(shapeB);
+    const ra = makeRng(5), rb = makeRng(5);
+    for (let i = 0; i < 40; i++) {
+      assert.equal(simulateThrow(a, cfg.physics, ra), simulateThrow(b, cfg.physics, rb), `${kind}, lancer ${i}`);
+    }
+  }
+});
+
+test('le générateur aléatoire est uniforme et les graines donnent des suites distinctes', () => {
+  const rng = makeRng([1, 2, 3, 4]);
+  const bins = new Array(20).fill(0);
+  const N = 200000;
+  let sum = 0;
+  for (let i = 0; i < N; i++) {
+    const u = rng();
+    assert.ok(u >= 0 && u < 1);
+    sum += u;
+    bins[Math.floor(u * 20)]++;
+  }
+  // khi-deux à 19 degrés de liberté : seuil à 0,1 % ≈ 43,8
+  const e = N / 20;
+  const chi2 = bins.reduce((acc, o) => acc + (o - e) ** 2 / e, 0);
+  assert.ok(chi2 < 43.8, `khi-deux = ${chi2}`);
+  assert.ok(Math.abs(sum / N - 0.5) < 0.005);
+  const r1 = makeRng(1), r2 = makeRng(2);
+  assert.notEqual(r1(), r2());
+});
+
+test('l’orientation de départ est uniforme (axe vers le haut une fois sur deux)', () => {
+  const cfg = config((c) => (c.kind = 'jeton'));
+  const body = createBody(makeShape(cfg));
+  const rng = makeRng(8);
+  const N = 40000;
+  let up = 0, sq = 0;
+  for (let i = 0; i < N; i++) {
+    launch(body, rng, cfg.physics);
+    const a = body.R[5];
+    if (a > 0) up++;
+    sq += a * a;
+  }
+  // 4 écarts-types de marge
+  assert.ok(Math.abs(up / N - 0.5) < 4 * 0.5 / Math.sqrt(N), `part vers le haut : ${up / N}`);
+  assert.ok(Math.abs(sq / N - 1 / 3) < 0.01, `E[a²] = ${sq / N}`);
+});
