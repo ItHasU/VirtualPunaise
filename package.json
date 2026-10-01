@@ -1,0 +1,10 @@
+{
+  "name": "virtualpunaise",
+  "private": true,
+  "type": "module",
+  "description": "Simulateur physique de lancers de punaises (site statique)",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "npx --yes http-server -c-1 -p 8080 ."
+  }
+}

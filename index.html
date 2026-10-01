@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VirtualPunaise</title>
+  <meta name="description" content="Simulateur physique de lancers de punaises et de jetons pour estimer une probabilité par la fréquence.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><ellipse cx='16' cy='11' rx='12' ry='5' fill='%23d2453d'/><path d='M15 14h2l-1 16z' fill='%23889'/></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./js/vendor/three/three.module.min.js",
+        "three/addons/controls/OrbitControls.js": "./js/vendor/three/OrbitControls.js"
+      }
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1>VirtualPunaise</h1>
+    <p>Lancers simulés de punaises (ou de jetons) sur une table, pour estimer une probabilité par la fréquence et la comparer à une expérience réelle.</p>
+  </header>
+
+  <main class="layout">
+    <!-- ===================== Paramètres ===================== -->
+    <aside class="panel settings" aria-label="Paramètres">
+      <h2>Objet lancé</h2>
+      <div class="segmented" role="radiogroup" aria-label="Type d’objet">
+        <label><input type="radio" name="kind" value="punaise" checked> Punaise</label>
+        <label><input type="radio" name="kind" value="jeton"> Jeton</label>
+      </div>
+
+      <fieldset data-kind="punaise">
+        <legend>Dimensions de la punaise</legend>
+        <label>Diamètre de la tête <span><input type="number" data-path="thumbtack.headDiameter" min="2" max="40" step="0.5"> mm</span></label>
+        <label>Épaisseur de la tête <span><input type="number" data-path="thumbtack.headThickness" min="0.2" max="10" step="0.1"> mm</span></label>
+        <label>Longueur de la pointe <span><input type="number" data-path="thumbtack.needleLength" min="1" max="40" step="0.5"> mm</span></label>
+        <label>Diamètre de la pointe <span><input type="number" data-path="thumbtack.needleDiameter" min="0.2" max="5" step="0.1"> mm</span></label>
+        <label>Matériau de la tête
+          <select data-path="thumbtack.headMaterial">
+            <option value="acier">Acier</option>
+            <option value="laiton">Laiton</option>
+            <option value="plastique">Plastique</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset data-kind="jeton" hidden>
+        <legend>Dimensions du jeton</legend>
+        <label>Diamètre <span><input type="number" data-path="token.diameter" min="2" max="60" step="0.5"> mm</span></label>
+        <label>Épaisseur <span><input type="number" data-path="token.thickness" min="0.2" max="30" step="0.1"> mm</span></label>
+        <label>Matériau
+          <select data-path="token.material">
+            <option value="plastique">Plastique</option>
+            <option value="acier">Acier</option>
+            <option value="laiton">Laiton</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Conditions de lancer</legend>
+        <label>Hauteur de lâcher <span><input type="number" data-path="physics.height" data-scale="0.01" min="1" max="200" step="1"> cm</span></label>
+        <label>Rotation initiale max <span><input type="number" data-path="physics.spin" data-scale="6.283185307" min="0" max="30" step="0.5"> tr/s</span></label>
+        <label>Vitesse horizontale max <span><input type="number" data-path="physics.lateral" data-scale="0.01" min="0" max="300" step="5"> cm/s</span></label>
+        <label>Coefficient de restitution <span><input type="number" data-path="physics.restitution" min="0" max="0.95" step="0.05"></span></label>
+        <label>Coefficient de frottement <span><input type="number" data-path="physics.friction" min="0" max="1.5" step="0.05"></span></label>
+      </fieldset>
+      <p class="hint" id="mass-info"></p>
+      <button type="button" class="secondary" id="reset-config">Paramètres par défaut</button>
+    </aside>
+
+    <!-- ===================== Vue 3D ===================== -->
+    <section class="panel view-panel" aria-label="Lancer en 3D">
+      <div class="toolbar">
+        <label>Série de <input type="number" id="series-size" min="1" max="100" value="20"> lancers</label>
+        <button type="button" id="throw-series">Lancer une série</button>
+        <label class="check"><input type="checkbox" id="auto-series"> Enchaîner</label>
+        <label>Vitesse
+          <select id="speed">
+            <option value="1">× 1</option>
+            <option value="0.5">× 0,5</option>
+            <option value="0.2">× 0,2</option>
+            <option value="0.05">× 0,05</option>
+          </select>
+        </label>
+      </div>
+      <div id="viewer" class="viewer"></div>
+      <p class="series-result" id="series-result" aria-live="polite">Cliquez sur « Lancer une série ». Faites glisser pour tourner la vue, molette pour zoomer.</p>
+    </section>
+
+    <!-- ===================== Simulation massive ===================== -->
+    <section class="panel batch" aria-label="Simulation rapide">
+      <h2>Simulation rapide</h2>
+      <p class="hint">Les lancers sont calculés en arrière-plan, sans affichage, avec la même physique. Ils sont regroupés en séries de la taille choisie ci-dessus.</p>
+      <div class="toolbar">
+        <label><input type="number" id="batch-series" min="1" max="100000" value="500"> séries</label>
+        <button type="button" id="batch-run">Lancer</button>
+        <button type="button" class="secondary" id="batch-stop" disabled>Arrêter</button>
+        <button type="button" class="secondary" id="clear-results">Effacer les résultats</button>
+      </div>
+      <progress id="batch-progress" value="0" max="1" hidden></progress>
+      <p class="hint" id="batch-info"></p>
+    </section>
+
+    <!-- ===================== Résultats ===================== -->
+    <section class="panel results" aria-label="Résultats">
+      <h2>Résultats de la simulation</h2>
+      <div class="tiles">
+        <div class="tile"><span class="tile-label">Lancers simulés</span><span class="tile-value" id="stat-total">0</span></div>
+        <div class="tile"><span class="tile-label" id="stat-target-label">Sur le dos</span><span class="tile-value" id="stat-freq">—</span><span class="tile-sub" id="stat-ci"></span></div>
+        <div class="tile"><span class="tile-label">Séries</span><span class="tile-value" id="stat-series">0</span><span class="tile-sub" id="stat-in-interval"></span></div>
+      </div>
+      <table class="data">
+        <thead><tr><th>Position finale</th><th>Effectif</th><th>Fréquence</th></tr></thead>
+        <tbody id="outcome-table"></tbody>
+      </table>
+
+      <h3>Évolution de la fréquence</h3>
+      <div class="legend">
+        <span><i class="swatch s1"></i>Simulation (fréquence cumulée)</span>
+        <span><i class="swatch s2 dashed"></i>Expérience réelle (bande : intervalle de confiance)</span>
+      </div>
+      <div class="chart"><canvas id="freq-chart"></canvas></div>
+
+      <h3>Fluctuation d’échantillonnage</h3>
+      <p class="hint">Chaque barre compte les séries dont la fréquence observée vaut cette valeur. La zone grisée est l’intervalle de fluctuation p ± 1/√n.</p>
+      <div class="chart"><canvas id="series-chart"></canvas></div>
+      <button type="button" class="secondary" id="export-csv">Exporter les séries (CSV)</button>
+    </section>
+
+    <!-- ===================== Expérience réelle ===================== -->
+    <section class="panel real" aria-label="Expérience réelle">
+      <h2>Comparaison avec l’expérience réelle</h2>
+      <p class="hint">Saisissez les résultats des élèves (un groupe par ligne). Les données sont conservées dans ce navigateur.</p>
+      <table class="data editable">
+        <thead><tr><th>Groupe</th><th>Lancers</th><th id="real-target-head">« Sur le dos »</th><th></th></tr></thead>
+        <tbody id="real-table"></tbody>
+        <tfoot><tr><th>Total</th><th id="real-total-n">0</th><th id="real-total-k">0</th><th></th></tr></tfoot>
+      </table>
+      <button type="button" class="secondary" id="real-add">Ajouter un groupe</button>
+      <div class="comparison" id="comparison" aria-live="polite"></div>
+    </section>
+
+    <section class="panel about">
+      <details>
+        <summary>Comment fonctionne la simulation ?</summary>
+        <ul>
+          <li>Chaque objet est un <b>solide rigide</b> : masse, centre de masse et matrice d’inertie sont calculés à partir des dimensions et des matériaux (tête et pointe d’une punaise ont des masses très différentes, d’où la dissymétrie).</li>
+          <li>L’objet est lâché d’une hauteur donnée avec une <b>orientation aléatoire uniforme</b>, une rotation et une vitesse horizontale aléatoires.</li>
+          <li>Le mouvement est intégré au pas de 1 ms (pesanteur, conservation du moment cinétique). Les chocs avec la table utilisent un coefficient de <b>restitution</b> et un <b>frottement de Coulomb</b>.</li>
+          <li>Une fois immobile, la punaise est classée « sur le dos » (pointe vers le haut) ou « sur le côté » (pointe et bord de la tête au contact de la table). Le jeton est classé pile, face ou tranche.</li>
+          <li>Les objets d’une même série ne se heurtent pas entre eux : chaque lancer est indépendant, comme dans le modèle probabiliste.</li>
+          <li>La probabilité obtenue dépend des paramètres (restitution, frottement, hauteur…) : on peut les ajuster pour se rapprocher des conditions réelles.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
