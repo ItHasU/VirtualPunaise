@@ -2,6 +2,7 @@ import { makeShape, DEFAULT_CONFIG, OUTCOME_LABELS, classify } from './shapes.js
 import { makeRng } from './physics.js';
 import { simpleInterval, waldInterval, intervalsOverlap, twoProportionTest, formatPct } from './stats.js';
 import { FrequencyChart, SeriesHistogram, EnergyChart } from './charts.js';
+import { BUILD_INFO } from './build-info.js';
 
 const $ = (sel) => document.querySelector(sel);
 const STORAGE_CONFIG = 'virtualpunaise.config';
@@ -445,6 +446,9 @@ function toast(msg) {
 
 // ---------------------------------------------------------------- initialisation
 function init() {
+  $('#build-info').textContent = BUILD_INFO.date
+    ? `Version générée le ${BUILD_INFO.date} (commit ${BUILD_INFO.commit})`
+    : 'Version de développement';
   fillForm();
   updateMassInfo();
   renderRealTable();

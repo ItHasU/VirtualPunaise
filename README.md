@@ -35,15 +35,20 @@ npm start
 puis ouvrir <http://localhost:8080>. Il peut aussi être publié tel quel (GitHub Pages, etc.).
 three.js est inclus dans `js/vendor/` : le site fonctionne sans accès à un CDN.
 
-## Paquet zip
+## Paquet zip et releases
 
-Le workflow GitHub Actions `.github/workflows/package.yml` (à chaque push, pull request,
-ou manuellement depuis l'onglet *Actions*) lance les tests puis produit l'artefact
-**`virtualpunaise`** : un zip contenant l'application directement à sa racine
-(`index.html`, `css/`, `js/`…). Il suffit de le décompresser et de servir le dossier.
+Le workflow GitHub Actions `.github/workflows/package.yml` lance les tests puis assemble
+l'application dans un zip contenant directement `index.html`, `css/`, `js/`… à sa racine.
 
-Pour un tag `v*` (par exemple `v1.0.0`), le fichier `virtualpunaise.zip` est en plus
-attaché à une *release* GitHub.
+- **Chaque push sur `main` publie une release GitHub** (tag `vAAAA.MM.JJ-HHMMSS`) avec le
+  fichier `virtualpunaise_AAAA-MM-JJ_HHhMM.zip` : le nom du zip porte la date et l'heure
+  de génération (heure de Paris).
+- La date de génération figure aussi dans le zip (`version.txt`) et en bas de la page.
+- Sur les autres branches et les pull requests, le zip est disponible comme artefact
+  `virtualpunaise` de l'exécution du workflow (onglet *Actions*).
+
+Pour utiliser une release : télécharger le zip, le décompresser, puis servir le dossier
+(voir « Lancer le site »).
 
 En local : `./scripts/package.sh` (nécessite `zip`).
 
@@ -86,6 +91,7 @@ js/viewer.js        rendu 3D (three.js)
 js/overlays.js      visualisation des grandeurs physiques (forces, vitesses…)
 js/charts.js        graphiques (canvas)
 js/main.js          interface
+js/build-info.js    date de génération (remplacé lors de la création du zip)
 js/vendor/three/    three.js r170 (licence MIT)
 tests/              tests Node.js
 scripts/package.sh  assemblage du zip

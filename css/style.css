@@ -236,6 +236,8 @@ table.editable td { padding: 3px 4px; }
 .about summary { cursor: pointer; font-weight: 600; }
 .about li { margin: 6px 0; }
 
+.site-footer { max-width: 1400px; margin: 0 auto; padding: 0 16px 24px; color: var(--text-muted); font-size: 0.82rem; }
+
 .toast {
   position: fixed;
   left: 50%;
