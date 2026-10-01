@@ -247,3 +247,84 @@ export class SeriesHistogram {
     this.draw();
   }
 }
+
+const ENERGY_SERIES = [
+  { key: 'potential', label: 'Énergie potentielle', color: '--series-1' },
+  { key: 'translational', label: 'Énergie cinétique de translation', color: '--series-2' },
+  { key: 'rotational', label: 'Énergie cinétique de rotation', color: '--series-3' },
+  { key: 'total', label: 'Énergie mécanique totale', color: '--text-muted', dash: [5, 4] },
+];
+
+/** Énergies de l'objet suivi en fonction du temps (simulé). */
+export class EnergyChart {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.tooltip = new Tooltip(canvas);
+    canvas.addEventListener('mousemove', (e) => {
+      const r = canvas.getBoundingClientRect();
+      this.hoverX = e.clientX - r.left;
+      this.draw();
+    });
+    canvas.addEventListener('mouseleave', () => { this.hoverX = null; this.tooltip.hide(); this.draw(); });
+    new ResizeObserver(() => this.draw()).observe(canvas);
+  }
+
+  /** @param samples { t: number[], potential, translational, rotational, total } en J */
+  update(samples) {
+    this.samples = samples;
+    this.draw();
+  }
+
+  draw() {
+    const { g, w, h } = setupCanvas(this.canvas);
+    const S = this.samples;
+    if (!S || S.t.length < 2) {
+      g.fillStyle = css('--text-muted');
+      g.textAlign = 'center';
+      g.fillText('Lancez une série pour suivre les énergies', w / 2, h / 2);
+      return;
+    }
+    const n = S.t.length;
+    const tMax = Math.max(S.t[n - 1], 0.1);
+    let eMax = 0;
+    for (const v of S.total) eMax = Math.max(eMax, v);
+    for (const v of S.translational) eMax = Math.max(eMax, v);
+    for (const v of S.rotational) eMax = Math.max(eMax, v);
+    const mJ = eMax * 1000;
+    const yTicks = niceTicks(mJ || 1, 4);
+    const top = yTicks[yTicks.length - 1];
+    const xScale = (t) => PAD.left + (t / tMax) * (w - PAD.left - PAD.right);
+    const yScale = (e) => PAD.top + (1 - e / top) * (h - PAD.top - PAD.bottom);
+    const xTicks = niceTicks(tMax, 5).filter((t) => t <= tMax);
+    const fmt = (v) => v.toLocaleString('fr-FR', { maximumFractionDigits: 3 });
+    drawAxes(g, w, h, xScale, yScale, xTicks, yTicks, fmt, (v) => `${fmt(v)} mJ`, 'Temps (s)');
+
+    // au plus ~800 points tracés par courbe
+    const stride = Math.max(1, Math.floor(n / 800));
+    for (const s of ENERGY_SERIES) {
+      g.strokeStyle = css(s.color);
+      g.lineWidth = 2;
+      g.setLineDash(s.dash ?? []);
+      g.beginPath();
+      for (let i = 0; i < n; i += stride) {
+        const X = xScale(S.t[i]), Y = yScale(S[s.key][i] * 1000);
+        i ? g.lineTo(X, Y) : g.moveTo(X, Y);
+      }
+      g.lineTo(xScale(S.t[n - 1]), yScale(S[s.key][n - 1] * 1000));
+      g.stroke();
+    }
+    g.setLineDash([]);
+
+    if (this.hoverX != null && this.hoverX >= PAD.left) {
+      const t = ((this.hoverX - PAD.left) / (w - PAD.left - PAD.right)) * tMax;
+      let i = 0;
+      while (i < n - 1 && S.t[i + 1] <= t) i++;
+      const X = xScale(S.t[i]);
+      g.strokeStyle = css('--axis');
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(X + 0.5, PAD.top); g.lineTo(X + 0.5, h - PAD.bottom); g.stroke();
+      const rows = ENERGY_SERIES.map((s) => `${s.label} : ${fmt(S[s.key][i] * 1000)} mJ`).join('<br>');
+      this.tooltip.show(X, PAD.top + 40, `<b>t = ${fmt(S.t[i])} s</b><br>${rows}`);
+    }
+  }
+}

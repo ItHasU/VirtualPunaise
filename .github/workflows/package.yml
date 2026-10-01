@@ -1,0 +1,45 @@
+name: Paquet de l'application
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: npm test
+
+      - name: Assemblage
+        run: ./scripts/package.sh
+
+      # L'artefact téléchargé depuis GitHub est un zip contenant directement
+      # index.html, css/, js/… (le contenu de dist/ est placé à la racine).
+      - name: Artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: virtualpunaise
+          path: dist/
+          if-no-files-found: error
+
+      - name: Publication (tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" virtualpunaise.zip \
+            --title "VirtualPunaise $GITHUB_REF_NAME" --generate-notes \
+          || gh release upload "$GITHUB_REF_NAME" virtualpunaise.zip --clobber

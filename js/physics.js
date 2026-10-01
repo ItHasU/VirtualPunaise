@@ -312,3 +312,14 @@ export function simulateThrow(body, physics, rng) {
   while (!body.asleep) step(body, DT, physics);
   return outcome(body);
 }
+
+/**
+ * Énergies mécaniques (J). Énergie potentielle de pesanteur prise par rapport à la table.
+ */
+export function energies(body) {
+  const m = body.shape.mass, v = body.v, w = body.w, L = body.L;
+  const potential = m * GRAVITY * body.x[1];
+  const translational = 0.5 * m * (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  const rotational = 0.5 * (w[0] * L[0] + w[1] * L[1] + w[2] * L[2]);
+  return { potential, translational, rotational, total: potential + translational + rotational };
+}

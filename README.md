@@ -10,6 +10,11 @@ réelle menée en classe.
 ## Fonctionnalités
 
 - **Vue 3D** d'une série de *n* lancers en temps réel (ralenti possible, enchaînement automatique).
+- **Visualisation de la physique** pour l'objet suivi (cliquer sur un objet pour le choisir) :
+  centre de masse et sa trajectoire, poids, réactions de la table aux points de contact
+  (composantes normale et de frottement), vitesse, vitesse angulaire, points de l'enveloppe
+  de contact ; pause, pas à pas (1 ms), caméra qui suit l'objet, mesures en direct et
+  courbes d'énergie (potentielle, cinétique de translation et de rotation, totale).
 - **Simulation rapide** de milliers de lancers en arrière-plan (Web Workers, calcul en parallèle).
 - **Dimensions réglables** de la punaise (tête, pointe, matériau de la tête) et **mode jeton** (objet symétrique : pile / face / tranche).
 - **Conditions de lancer réglables** : hauteur, rotation, vitesse horizontale, restitution, frottement.
@@ -29,6 +34,18 @@ npm start
 
 puis ouvrir <http://localhost:8080>. Il peut aussi être publié tel quel (GitHub Pages, etc.).
 three.js est inclus dans `js/vendor/` : le site fonctionne sans accès à un CDN.
+
+## Paquet zip
+
+Le workflow GitHub Actions `.github/workflows/package.yml` (à chaque push, pull request,
+ou manuellement depuis l'onglet *Actions*) lance les tests puis produit l'artefact
+**`virtualpunaise`** : un zip contenant l'application directement à sa racine
+(`index.html`, `css/`, `js/`…). Il suffit de le décompresser et de servir le dossier.
+
+Pour un tag `v*` (par exemple `v1.0.0`), le fichier `virtualpunaise.zip` est en plus
+attaché à une *release* GitHub.
+
+En local : `./scripts/package.sh` (nécessite `zip`).
 
 ## Modèle physique
 
@@ -66,8 +83,11 @@ js/physics.js       moteur de dynamique du solide contre un plan
 js/stats.js         intervalles de confiance / fluctuation, test de proportions
 js/worker.js        simulation en arrière-plan
 js/viewer.js        rendu 3D (three.js)
+js/overlays.js      visualisation des grandeurs physiques (forces, vitesses…)
 js/charts.js        graphiques (canvas)
 js/main.js          interface
 js/vendor/three/    three.js r170 (licence MIT)
 tests/              tests Node.js
+scripts/package.sh  assemblage du zip
+.github/workflows/  intégration continue (tests + zip)
 ```

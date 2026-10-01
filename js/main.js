@@ -1,7 +1,7 @@
-import { makeShape, DEFAULT_CONFIG, OUTCOME_LABELS } from './shapes.js';
+import { makeShape, DEFAULT_CONFIG, OUTCOME_LABELS, classify } from './shapes.js';
 import { makeRng } from './physics.js';
 import { simpleInterval, waldInterval, intervalsOverlap, twoProportionTest, formatPct } from './stats.js';
-import { FrequencyChart, SeriesHistogram } from './charts.js';
+import { FrequencyChart, SeriesHistogram, EnergyChart } from './charts.js';
 
 const $ = (sel) => document.querySelector(sel);
 const STORAGE_CONFIG = 'virtualpunaise.config';
@@ -47,6 +47,7 @@ let realData = load(STORAGE_REAL, { punaise: [], jeton: [] });
 let viewer = null;
 const freqChart = new FrequencyChart($('#freq-chart'));
 const seriesChart = new SeriesHistogram($('#series-chart'));
+const energyChart = new EnergyChart($('#energy-chart'));
 
 function randomSeed() {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -269,21 +270,80 @@ function renderRealTable() {
 
 // ---------------------------------------------------------------- vue 3D
 let seriesRng = makeRng(randomSeed());
-async function throwSeries() {
-  if (!viewer) return;
-  const n = readSeriesSize();
-  $('#throw-series').disabled = true;
-  $('#series-result').textContent = 'Lancer en cours…';
-  const res = await viewer.launchSeries(shape, config.physics, n, seriesRng);
-  $('#throw-series').disabled = false;
+let launching = false;
+/**
+ * Lance une série dans la vue 3D. Par défaut, n = taille de série choisie ;
+ * `single` lance un seul objet au ralenti, suivi par la caméra.
+ */
+async function throwSeries({ single = false } = {}) {
+  if (!viewer || launching) return;
+  const n = single ? 1 : readSeriesSize();
+  if (single) {
+    $('#speed').value = '0.05';
+    $('#follow').checked = true;
+    $('#auto-series').checked = false;
+  }
+  viewer.speed = +$('#speed').value;
+  viewer.follow = $('#follow').checked;
+  launching = true;
+  setRunningUi(true);
+  $('#series-result').textContent = single ? 'Lancer au ralenti en cours…' : 'Lancer en cours…';
+  const promise = viewer.launchSeries(shape, config.physics, n, seriesRng);
+  if (single) viewer.frameSelected(0.12);
+  const res = await promise;
+  launching = false;
+  setRunningUi(false);
   if (!res) return;
   const idx = res.map((o) => shape.outcomes.indexOf(o));
   addOutcomes(idx);
   if (n === results.seriesSize) addSeries(idx);
   const counts = shape.outcomes.map((o) => `${OUTCOME_LABELS[o]} : ${res.filter((r) => r === o).length}`);
-  $('#series-result').textContent = `Série de ${n} : ${counts.join(' · ')}`;
+  $('#series-result').textContent = single ? `Lancer unique : ${OUTCOME_LABELS[res[0]]}` : `Série de ${n} : ${counts.join(' · ')}`;
   scheduleRender();
-  if ($('#auto-series').checked) setTimeout(() => $('#auto-series').checked && throwSeries(), 600);
+  if (!single && $('#auto-series').checked) setTimeout(() => $('#auto-series').checked && throwSeries(), 600);
+}
+
+function setRunningUi(running) {
+  $('#throw-series').disabled = running;
+  $('#slow-single').disabled = running;
+  $('#pause').disabled = !running;
+  $('#step-once').disabled = !running;
+  if (viewer) viewer.setPaused(false);
+  $('#pause').textContent = '⏸ Pause';
+}
+
+function togglePause() {
+  if (!viewer) return;
+  viewer.setPaused(!viewer.paused);
+  $('#pause').textContent = viewer.paused ? '▶ Reprendre' : '⏸ Pause';
+}
+
+// Mesures en direct de l'objet suivi.
+const fmt = (v, d = 2) => v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+function updateReadout() {
+  const item = viewer?.selected;
+  const set = (k, v) => (document.querySelector(`#readout [data-r="${k}"]`).textContent = v);
+  if (!item) {
+    for (const k of ['t', 'h', 'v', 'w', 'n', 'fc', 'f', 'state']) set(k, '—');
+    energyChart.update(null);
+    return;
+  }
+  const b = item.body;
+  set('t', `${fmt(b.t, 3)} s`);
+  set('h', `${fmt(b.x[1] * 100, 2)} cm`);
+  set('v', `${fmt(Math.hypot(...b.v), 2)} m/s`);
+  const w = Math.hypot(...b.w);
+  set('w', `${fmt(w, 1)} rad/s (${fmt(w / (2 * Math.PI), 1)} tr/s)`);
+  set('n', b.asleep ? '—' : String(b.nContacts ? [...b.contacts.slice(0, b.nContacts)].filter((c) => c.accN > 0).length : 0));
+  const fc = viewer.overlay.shownForce;
+  set('fc', fc ? `${fmt(fc, fc < 10 ? 2 : 0)} × le poids` : '0');
+  set('f', viewer.overlay.peakForce ? `${fmt(viewer.overlay.peakForce, 0)} × le poids` : '—');
+  set('state', b.asleep ? `Immobile : ${OUTCOME_LABELS[outcomeOf(b)]}` : b.nContacts ? 'Au contact de la table' : 'En vol');
+  energyChart.update(viewer.samples);
+}
+
+function outcomeOf(body) {
+  return classify(body.shape, body.R[5]);
 }
 
 function readSeriesSize() {
@@ -398,7 +458,26 @@ function init() {
   $('#reset-config').addEventListener('click', () => {
     applyConfig(mergeConfig(DEFAULT_CONFIG, { kind: config.kind }));
   });
-  $('#throw-series').addEventListener('click', throwSeries);
+  $('#throw-series').addEventListener('click', () => throwSeries());
+  $('#slow-single').addEventListener('click', () => throwSeries({ single: true }));
+  $('#pause').addEventListener('click', togglePause);
+  $('#step-once').addEventListener('click', () => {
+    if (!viewer?.running) return;
+    if (!viewer.paused) togglePause();
+    viewer.stepOnce();
+    updateReadout();
+  });
+  $('#reset-view').addEventListener('click', () => {
+    $('#follow').checked = false;
+    if (viewer) {
+      viewer.follow = false;
+      viewer.resetView();
+    }
+  });
+  $('#follow').addEventListener('change', (e) => viewer && (viewer.follow = e.target.checked));
+  for (const el of document.querySelectorAll('[data-overlay]')) {
+    el.addEventListener('change', () => viewer?.overlay.setFlag(el.dataset.overlay, el.checked));
+  }
   $('#auto-series').addEventListener('change', (e) => {
     if (e.target.checked && !$('#throw-series').disabled) throwSeries();
   });
@@ -431,12 +510,15 @@ function init() {
     .then(({ Viewer }) => {
       viewer = new Viewer($('#viewer'));
       viewer.speed = +$('#speed').value;
+      for (const el of document.querySelectorAll('[data-overlay]')) viewer.overlay.setFlag(el.dataset.overlay, el.checked);
+      setInterval(updateReadout, 100);
     })
     .catch((err) => {
       console.error(err);
       $('#viewer').classList.add('unavailable');
       $('#viewer').textContent = 'Vue 3D indisponible (WebGL ou three.js n’a pas pu être chargé). La simulation rapide reste utilisable.';
       $('#throw-series').disabled = true;
+      $('#slow-single').disabled = true;
     });
 }
 

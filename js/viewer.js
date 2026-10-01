@@ -1,10 +1,13 @@
 // Visualisation 3D (three.js) d'une série de n lancers simulés en temps réel.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createBody, launch, step, outcome, DT } from './physics.js';
+import { createBody, launch, step, outcome, energies, DT } from './physics.js';
+import { PhysicsOverlay } from './overlays.js';
 
 const SPACING = 0.06; // m entre deux points de chute
 const MAX_STEPS_PER_FRAME = 200;
+const SAMPLE_PERIOD = 0.002; // s (temps simulé) entre deux mesures d'énergie
+const MAX_SAMPLES = 6000;
 
 function faceTexture(letter, bg, fg) {
   const c = document.createElement('canvas');
@@ -96,8 +99,23 @@ export class Viewer {
     this.items = [];
     this.speed = 1;
     this.running = false;
+    this.paused = false;
+    this.follow = false;
     this.lastTime = null;
     this.accumulator = 0;
+    this.overlay = new PhysicsOverlay(this.scene);
+    this.selected = null;
+    this.samples = null;
+    this.onSelect = null; // rappel quand l'objet suivi change
+
+    // clic (sans glisser) sur un objet : il devient l'objet suivi
+    const canvas = this.renderer.domElement;
+    let down = null;
+    canvas.addEventListener('pointerdown', (e) => (down = [e.clientX, e.clientY]));
+    canvas.addEventListener('pointerup', (e) => {
+      if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 5) this.pick(e);
+      down = null;
+    });
 
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
@@ -112,9 +130,90 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
   }
 
+  pick(e) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.camera);
+    const hits = ray.intersectObjects(this.items.map((it) => it.mesh), true);
+    const hit = hits.find((h) => h.object.isMesh);
+    if (!hit) return;
+    const item = this.items.find((it) => it.mesh === hit.object.parent || it.mesh === hit.object);
+    if (item) this.select(item);
+  }
+
+  select(item) {
+    this.selected = item;
+    this.overlay.attach(item);
+    this.samples = { t: [], potential: [], translational: [], rotational: [], total: [] };
+    this.sample(true);
+    this.onSelect?.(item);
+  }
+
+  // Mesure des énergies de l'objet suivi (au plus une fois toutes les SAMPLE_PERIOD s simulées).
+  sample(force = false) {
+    const b = this.selected?.body, S = this.samples;
+    if (!b || !S || S.t.length >= MAX_SAMPLES) return;
+    const last = S.t[S.t.length - 1];
+    if (!force && b.t - last < SAMPLE_PERIOD) return;
+    const e = energies(b);
+    S.t.push(b.t);
+    for (const k of ['potential', 'translational', 'rotational', 'total']) S[k].push(e[k]);
+  }
+
+  /** Rapproche la caméra de l'objet suivi (distance en m), sans changer l'angle de vue. */
+  frameSelected(distance) {
+    const b = this.selected?.body.x;
+    if (!b) return;
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    this.controls.target.set(b[0], b[1], b[2]);
+    this.camera.position.copy(this.controls.target).addScaledVector(dir, distance);
+  }
+
+  resetView() {
+    this.camera.position.set(0, 0.27, 0.34);
+    this.controls.target.set(0, 0, 0.01);
+  }
+
+  setPaused(p) {
+    this.paused = p;
+  }
+
+  /** Avance d'un seul pas de calcul (en pause). */
+  stepOnce() {
+    if (!this.running) return;
+    this.advance(1);
+    this.syncMeshes();
+    this.overlay.update(0);
+    this.checkFinished();
+  }
+
+  advance(steps) {
+    for (let s = 0; s < steps; s++) {
+      for (const it of this.items) {
+        step(it.body, DT, this.physics);
+        if (it === this.selected) {
+          this.overlay.recordStep(it.body);
+          this.sample();
+        }
+      }
+    }
+  }
+
+  checkFinished() {
+    if (this.running && this.items.every((it) => it.body.asleep)) {
+      this.running = false;
+      const res = this.resolve;
+      this.resolve = null;
+      res?.(this.items.map((it) => outcome(it.body)));
+    }
+  }
+
   clear() {
     for (const it of this.items) this.scene.remove(it.mesh);
     this.items = [];
+    this.overlay.attach(null);
+    this.selected = null;
     this.running = false;
     if (this.resolve) this.resolve(null);
     this.resolve = null;
@@ -142,6 +241,7 @@ export class Viewer {
     this.syncMeshes();
     this.running = true;
     this.accumulator = 0;
+    this.select(this.items[0]);
     return new Promise((res) => (this.resolve = res));
   }
 
@@ -155,22 +255,23 @@ export class Viewer {
   frame(t) {
     const dtReal = this.lastTime == null ? 0 : Math.min((t - this.lastTime) / 1000, 0.05);
     this.lastTime = t;
-    if (this.running) {
+    if (this.running && !this.paused) {
       this.accumulator += dtReal * this.speed;
-      let steps = 0;
-      while (this.accumulator >= DT && steps < MAX_STEPS_PER_FRAME) {
-        for (const { body } of this.items) step(body, DT, this.physics);
-        this.accumulator -= DT;
-        steps++;
-      }
-      if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
+      const steps = Math.min(Math.floor(this.accumulator / DT), MAX_STEPS_PER_FRAME);
+      this.advance(steps);
+      this.accumulator = steps === MAX_STEPS_PER_FRAME ? 0 : this.accumulator - steps * DT;
       this.syncMeshes();
-      if (this.items.every((it) => it.body.asleep)) {
-        this.running = false;
-        const res = this.resolve;
-        this.resolve = null;
-        res?.(this.items.map((it) => outcome(it.body)));
-      }
+      this.checkFinished();
+    }
+    if (this.items.length) this.overlay.update(this.paused ? 0 : dtReal);
+    if (this.follow && this.selected) {
+      // la caméra accompagne l'objet suivi en gardant son orientation
+      const b = this.selected.body.x;
+      const target = this.controls.target;
+      const k = 1 - Math.exp(-8 * dtReal);
+      const dx = (b[0] - target.x) * k, dy = (Math.max(b[1], 0) - target.y) * k, dz = (b[2] - target.z) * k;
+      target.x += dx; target.y += dy; target.z += dz;
+      this.camera.position.x += dx; this.camera.position.y += dy; this.camera.position.z += dz;
     }
     this.controls.update();
     this.renderer.render(this.scene, this.camera);

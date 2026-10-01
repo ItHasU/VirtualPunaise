@@ -14,6 +14,7 @@
   --series-1-strong: #1c5cab;
   --series-2: #eb6834;
   --series-2-soft: rgba(235, 104, 52, 0.16);
+  --series-3: #1baf7a;
   --good: #0a7a3a;
   --bad: #b3261e;
 }
@@ -34,6 +35,7 @@
     --series-1-strong: #86b6ef;
     --series-2: #d95926;
     --series-2-soft: rgba(217, 89, 38, 0.22);
+    --series-3: #199e70;
     --good: #4cc27a;
     --bad: #ff8a80;
   }
@@ -53,6 +55,7 @@
   --series-1-strong: #86b6ef;
   --series-2: #d95926;
   --series-2-soft: rgba(217, 89, 38, 0.22);
+  --series-3: #199e70;
   --good: #4cc27a;
   --bad: #ff8a80;
 }
@@ -203,6 +206,8 @@ table.editable td { padding: 3px 4px; }
 .swatch { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
 .swatch.s1 { border-color: var(--series-1); }
 .swatch.s2 { border-color: var(--series-2); }
+.swatch.s3 { border-color: var(--series-3); }
+.swatch.sm { border-color: var(--text-muted); }
 .swatch.dashed { border-top-style: dashed; }
 
 .chart { position: relative; }
@@ -242,3 +247,19 @@ table.editable td { padding: 3px 4px; }
   border-radius: 8px;
   max-width: calc(100% - 32px);
 }
+
+.overlay-toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; font-size: 0.88rem; }
+.overlay-toggles label { display: inline-flex; align-items: center; gap: 6px; }
+.overlay-toggles i { display: inline-block; flex: none; }
+.overlay-toggles .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px var(--ring, transparent); outline: 1px solid var(--border); }
+.overlay-toggles .line { width: 16px; border-top: 2px solid var(--c); }
+.overlay-toggles .arrow { width: 16px; height: 2px; background: var(--c); position: relative; margin-right: 4px; }
+.overlay-toggles .arrow::after { content: ""; position: absolute; right: -5px; top: -4px; border: 5px solid transparent; border-left-color: var(--c); border-right: 0; }
+.physics-toolbar { margin-bottom: 6px; }
+
+.physics-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 16px; }
+.physics-panel h3 { margin-top: 12px; }
+@media (max-width: 800px) { .physics-panel { grid-template-columns: minmax(0, 1fr); } }
+.readout { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 0.9rem; }
+.readout dt { color: var(--text-muted); }
+.readout dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }

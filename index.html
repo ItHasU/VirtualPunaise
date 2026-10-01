@@ -84,11 +84,55 @@
             <option value="0.5">× 0,5</option>
             <option value="0.2">× 0,2</option>
             <option value="0.05">× 0,05</option>
+            <option value="0.01">× 0,01</option>
           </select>
         </label>
+        <button type="button" class="secondary" id="slow-single" title="Un seul objet, au ralenti, caméra qui le suit">Observer un lancer au ralenti</button>
+      </div>
+      <div class="toolbar physics-toolbar">
+        <button type="button" class="secondary" id="pause" disabled>⏸ Pause</button>
+        <button type="button" class="secondary" id="step-once" disabled title="Avance d’un pas de calcul (1 ms)">Pas à pas (1 ms)</button>
+        <label class="check"><input type="checkbox" id="follow"> Caméra qui suit l’objet</label>
+        <button type="button" class="secondary" id="reset-view">Vue d’ensemble</button>
+      </div>
+      <div class="overlay-toggles" role="group" aria-label="Grandeurs physiques affichées">
+        <label><input type="checkbox" data-overlay="com" checked><i class="dot" style="--c:#111;--ring:#fff"></i>Centre de masse</label>
+        <label><input type="checkbox" data-overlay="trail" checked><i class="line" style="--c:#2a78d6"></i>Trajectoire du centre de masse</label>
+        <label><input type="checkbox" data-overlay="forces" checked><i class="arrow" style="--c:#1baf7a"></i>Poids<i class="arrow" style="--c:#eb6834"></i>Réaction de la table</label>
+        <label><input type="checkbox" data-overlay="velocity" checked><i class="arrow" style="--c:#2a78d6"></i>Vitesse</label>
+        <label><input type="checkbox" data-overlay="omega"><i class="arrow" style="--c:#7a5cff"></i>Vitesse angulaire</label>
+        <label><input type="checkbox" data-overlay="hull"><i class="dot" style="--c:#f2c200"></i>Points de contact possibles</label>
+        <label><input type="checkbox" data-overlay="transparent"> Objet transparent</label>
       </div>
       <div id="viewer" class="viewer"></div>
-      <p class="series-result" id="series-result" aria-live="polite">Cliquez sur « Lancer une série ». Faites glisser pour tourner la vue, molette pour zoomer.</p>
+      <p class="series-result" id="series-result" aria-live="polite">Cliquez sur « Lancer une série ». Faites glisser pour tourner la vue, molette pour zoomer, cliquez sur un objet pour le suivre.</p>
+      <div class="physics-panel">
+        <div>
+          <h3>Objet suivi</h3>
+          <dl class="readout" id="readout">
+            <dt>Temps</dt><dd data-r="t">—</dd>
+            <dt>Hauteur du centre de masse</dt><dd data-r="h">—</dd>
+            <dt>Vitesse</dt><dd data-r="v">—</dd>
+            <dt>Vitesse angulaire</dt><dd data-r="w">—</dd>
+            <dt>Points en contact</dt><dd data-r="n">—</dd>
+            <dt>Réaction de la table (affichée)</dt><dd data-r="fc">—</dd>
+            <dt>Réaction maximale pendant le lancer</dt><dd data-r="f">—</dd>
+            <dt>État</dt><dd data-r="state">—</dd>
+          </dl>
+          <p class="hint">Échelles des flèches : poids = 1 cm ; vitesse : 5 cm pour 1 m/s ; vitesse angulaire : 1 cm pour 10 rad/s (longueur limitée à 8 cm). Lors d’un choc, la réaction de la table, qui peut valoir des centaines de fois le poids, est limitée à 3 cm et reste affichée un court instant.</p>
+        </div>
+        <div>
+          <h3>Énergies</h3>
+          <div class="legend" id="energy-legend">
+            <span><i class="swatch s1"></i>Potentielle</span>
+            <span><i class="swatch s2"></i>Cinétique (translation)</span>
+            <span><i class="swatch s3"></i>Cinétique (rotation)</span>
+            <span><i class="swatch sm dashed"></i>Totale</span>
+          </div>
+          <div class="chart"><canvas id="energy-chart"></canvas></div>
+          <p class="hint">L’énergie mécanique est constante pendant le vol et diminue à chaque choc (rebond imparfait, frottement).</p>
+        </div>
+      </div>
     </section>
 
     <!-- ===================== Simulation massive ===================== -->
